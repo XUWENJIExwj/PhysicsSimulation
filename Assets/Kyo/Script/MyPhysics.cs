@@ -6,17 +6,19 @@ public class MyPhysics : MonoBehaviour
 {
     public float Mass = 1.0f;
     public float SlopeLimit = 45.0f;
-    public float PotentialLost = 0.1f;
+    public float PotentialLostRatio = 0.1f; // 何かにぶつかる時、変形などの原因で損失するエネルギーの比率
     public float Gravity = 0.098f;
     public float Friction = 0.1f;
     public float RollingFrictionRatio = 0.025f;
-    public float AirFriction = 0.001f;
+    public float AirFriction = 0.01f;
     public bool OnGround = false;
     public Transform CurrentGround;
     public Vector3 CurrGroundNormal = Vector3.up;
     public Vector3 Acceleration = Vector3.zero;
     public Vector3 AccelerationFriction = Vector3.zero;
     public Vector3 Velocity = Vector3.zero;
+    public float VelocityDeadZone = 0.00001f;
+    public float VelocityLen = 0.0f;
     public Vector3 PrevPosition;
     public Ray RayMoveDir;
     public Ray RayOnGround;
@@ -26,8 +28,6 @@ public class MyPhysics : MonoBehaviour
     public SphereCollider Collider;
     public Vector3 StartPosition;
     public float DebugLineLen = 20.0f;
-    public float VelocityDeadZone = 0.00001f;
-    public float VelocityLen = 0.0f;
 
     // Start is called before the first frame update
     void Start()
@@ -47,6 +47,10 @@ public class MyPhysics : MonoBehaviour
                 CurrentGround = RayHitInfoOnGround.transform;
                 CurrGroundNormal = RayHitInfoOnGround.normal;
                 OnGround = true;
+            }
+            else
+            {
+                AddForce(Gravity, Vector3.down);
             }
         }
         
@@ -98,9 +102,9 @@ public class MyPhysics : MonoBehaviour
         StartPosition = transform.position;
     }
 
-    public void AddForce(float power)
+    public void AddForce(float power, Vector3 direction)
     {
-        Acceleration = transform.forward * power / Mass;
+        Acceleration = direction * power / Mass;
         Velocity += Acceleration;
     }
 
@@ -121,42 +125,55 @@ public class MyPhysics : MonoBehaviour
             AccelerationFriction += back * AirFriction;
 
             // 重力加速度
-            float sin = Mathf.Sqrt(1.0f - cos * cos);
+            float sin = 1.0f - cos * cos;
             if (sin > 0.0f)
             {
+                sin = Mathf.Sqrt(sin);
                 Vector3 gravityVec = Quaternion.AngleAxis(90.0f, axis) * CurrGroundNormal;
                 AccelerationFriction += gravityVec * Gravity * sin;
             }
-            //AccelerationFriction.y = -Gravity * sin;
-
-
-
-            AccelerationFriction *= 1.0f / Mass;
-
-            Vector3 prevVel = Velocity;
-            Velocity += AccelerationFriction;
         }
         // 接地していない
         else
         {
-            //var back = -Vector3.Normalize(Velocity);
+            //if (Mathf)
+            var back = -Vector3.Normalize(Velocity);
 
-            //// 空気抵抗力
-            //AccelerationFriction = back * AirFriction / Mass;
+            if (Velocity.magnitude <= VelocityDeadZone)
+            {
+                back = Vector3.down;
+            }
 
-            //// 重力加速度
-            //AccelerationFriction.y += -Gravity;
+            // 空気抵抗力
+            AccelerationFriction = back * AirFriction;
 
-            //Vector3 prevVel = Velocity;
-            //Velocity += AccelerationFriction;
+            // 重力加速度
+            AccelerationFriction += Vector3.down * Gravity;
         }
 
+        AccelerationFriction *= 1.0f / Mass;
+
+        //Ray ray = new Ray(transform.position, Vector3.down);
+
+        //RaycastHit rayHitInfo;
+        //Physics.Raycast(ray, out rayHitInfo, RayLen, LayerMask.GetMask("Stage"));
+        //if (rayHitInfo.distance <= Collider.radius && AccelerationFriction.y < 0.0f)
+        ////if ((Mathf.Abs(Velocity.y) > 0.0f) && (Mathf.Abs(Velocity.y) < Gravity))
+        //{
+        //    //AccelerationFriction.y = 0.0f;
+        //    //Velocity.y = 0.0f;
+        //    var pos = transform.position;
+        //    pos = RayHitInfoOnGround.point + RayHitInfoOnGround.normal * Collider.radius;
+        //    transform.position = pos;
+        //}
+
+        Velocity += AccelerationFriction;
         Move();
     }
 
     public void Move()
     {
-        Vector3 velocity = Velocity * Time.deltaTime;
+        Vector3 velocity = Velocity;
         VelocityLen = Length2(velocity);
         // 実際の物理であれば、合力の方向が真上で、重力より小さい場合のみ、停止する
         // 今回のゲームでは速度がVelocityDeadZoneより小さく、平面の上にあれば、停止になれる
@@ -166,12 +183,12 @@ public class MyPhysics : MonoBehaviour
             return;
         }
         PrevPosition = transform.position;
-        transform.position += velocity;
+        transform.position += velocity * Time.deltaTime;
 
-        if (CheckOnGround())
+        if (CheckOnGroundWhenOnGround())
         {
             var pos = transform.position;
-            pos = RayHitInfoOnGround.point + RayHitInfoOnGround.normal * (Collider.radius - 0.01f);
+            pos = RayHitInfoOnGround.point + RayHitInfoOnGround.normal * Collider.radius;
             transform.position = pos;
         }
 
@@ -193,15 +210,16 @@ public class MyPhysics : MonoBehaviour
         return OnGround;
     }
 
-    public bool CheckOnGround()
+    public bool CheckOnGroundWhenOnGround()
     {
-        int onGround = 0;
+        OnGround = false;
 
         // 進行先の平面チェック
         VelocityLen = Length(Velocity);
         Vector3 norVelocity = Velocity * (1.0f / VelocityLen);
         RayOnGround.direction = norVelocity;
         RayOnGround.origin = transform.position;
+        // 進行の方向でRayCastする
         if (Physics.Raycast(RayOnGround, out RayHitInfoOnGround, RayLen, LayerMask.GetMask("Stage")))
         {
             // 進行先に平面がある場合、その平面の法線の逆方向をRayとして、RayCastで衝突目標を取得
@@ -209,6 +227,8 @@ public class MyPhysics : MonoBehaviour
             // CurrentGroundとCurrGroundNormalの更新準備に入る
             var targetTransform = RayHitInfoOnGround.transform;
             RayOnGround.direction = -RayHitInfoOnGround.normal;
+
+            // 進行先の平面の法線の逆方向でRayCastする
             Physics.Raycast(RayOnGround, out RayHitInfoOnGround, RayLen, LayerMask.GetMask("Stage"));
             if (targetTransform == RayHitInfoOnGround.transform)
             {
@@ -232,13 +252,33 @@ public class MyPhysics : MonoBehaviour
                 Vector3 normal = -Vector3.Normalize(Quaternion.AngleAxis(90.0f - angle, axis) * RayHitInfoOnGround.normal);
                 Debug.DrawLine(transform.position, transform.position + normal * DebugLineLen, Color.black);
 
-                // 進行先の平面と衝突したら、Velocityの向きをaxisを軸に、angle度回転させ
+                // 進行先の平面と衝突したら、Velocityの向きをaxisを軸に、angle度回転させる
                 if (RayHitInfoOnGround.distance <= Collider.radius)
                 {
-                    Velocity = Quaternion.AngleAxis(angle, axis) * norVelocity * VelocityLen;
-                    CurrentGround = RayHitInfoOnGround.transform;
-                    CurrGroundNormal = RayHitInfoOnGround.normal;
+                    var reflect = Vector3.Reflect(Velocity, RayHitInfoOnGround.normal);
+                    var reflectDotNormal = Vector3.Dot(reflect.normalized, RayHitInfoOnGround.normal);
+                    var cosSlopeLimit = Mathf.Cos(SlopeLimit * Mathf.Deg2Rad);
+                    if (reflectDotNormal > cosSlopeLimit + 0.0001f)
+                    {
+                        Velocity = reflect;
+                        if (Mathf.Abs(Velocity.y) < Gravity)
+                        {
+                            OnGround = true;
+                        }
+                    }
+                    else
+                    {
+                        Velocity = Quaternion.AngleAxis(angle, axis) * norVelocity * VelocityLen;
+                        CurrentGround = RayHitInfoOnGround.transform;
+                        CurrGroundNormal = RayHitInfoOnGround.normal;
+                        OnGround = true;
+                    }
+
+                    Velocity *= 1.0f - PotentialLostRatio;
+
                     Debug.DrawLine(transform.position, transform.position + norVelocity * DebugLineLen, Color.gray);
+
+                    return OnGround;
                 }
             }
         }
@@ -249,12 +289,11 @@ public class MyPhysics : MonoBehaviour
         Physics.Raycast(RayOnGround, out RayHitInfoOnGround, RayLen, LayerMask.GetMask("Stage"));
         if (RayHitInfoOnGround.distance <= Collider.radius)
         {
-            onGround += 1;
             CurrentGround = RayHitInfoOnGround.transform;
             CurrGroundNormal = RayHitInfoOnGround.normal;
+            OnGround = true;
         }
 
-        OnGround = onGround > 0;
         return OnGround;
     }
 
@@ -274,7 +313,7 @@ public class MyPhysics : MonoBehaviour
         return Mathf.Sqrt(Length2(vector));
     }
 
-    // 平面間のなす角度
+    // 平面と水平面のなす角度
     public float ThetaBetweenPlanes(Vector3 normal)
     {
         return Mathf.Rad2Deg * Mathf.Acos(Vector3.Dot(normal, Vector3.up));

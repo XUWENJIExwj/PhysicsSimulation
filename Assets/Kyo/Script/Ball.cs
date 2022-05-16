@@ -30,7 +30,7 @@ public class Ball : MonoBehaviour
         }
         if (Input.GetKeyDown(KeyCode.J))
         {
-            BallPhysics.AddForce(Power);
+            BallPhysics.AddForce(Power, transform.forward);
         }
     }
 }
