@@ -38,7 +38,7 @@ RenderSettings:
   m_ReflectionIntensity: 1
   m_CustomReflection: {fileID: 0}
   m_Sun: {fileID: 0}
-  m_IndirectSpecularColor: {r: 0.18028378, g: 0.22571412, b: 0.30692285, a: 1}
+  m_IndirectSpecularColor: {r: 0.17276844, g: 0.21589246, b: 0.2978263, a: 1}
   m_UseRadianceAmbientProbe: 0
 --- !u!157 &3
 LightmapSettings:
@@ -314,6 +314,7 @@ GameObject:
   - component: {fileID: 429235493}
   - component: {fileID: 429235497}
   - component: {fileID: 429235498}
+  - component: {fileID: 429235499}
   m_Layer: 0
   m_Name: Ball
   m_TagString: Untagged
@@ -391,7 +392,7 @@ Transform:
   m_PrefabAsset: {fileID: 0}
   m_GameObject: {fileID: 429235492}
   m_LocalRotation: {x: 0, y: 0, z: 0, w: 1}
-  m_LocalPosition: {x: 0, y: 1, z: 6.72}
+  m_LocalPosition: {x: 0, y: 5.86, z: 1.62}
   m_LocalScale: {x: 1, y: 1, z: 1}
   m_Children: []
   m_Father: {fileID: 0}
@@ -409,7 +410,8 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 3de5986c01183c3479e45fabf4c9467a, type: 3}
   m_Name: 
   m_EditorClassIdentifier: 
-  BallPhysics: {fileID: 429235498}
+  MyPhysic: {fileID: 429235498}
+  BallPhysic: {fileID: 429235499}
   Power: 10
 --- !u!114 &429235498
 MonoBehaviour:
@@ -418,7 +420,7 @@ MonoBehaviour:
   m_PrefabInstance: {fileID: 0}
   m_PrefabAsset: {fileID: 0}
   m_GameObject: {fileID: 429235492}
-  m_Enabled: 1
+  m_Enabled: 0
   m_EditorHideFlags: 0
   m_Script: {fileID: 11500000, guid: c4f5048c5a34a804893b17abff726a4d, type: 3}
   m_Name: 
@@ -438,6 +440,41 @@ MonoBehaviour:
   Velocity: {x: 0, y: 0, z: 0}
   VelocityDeadZone: 0.0001
   VelocityLen: 0
+  PrevPosition: {x: 0, y: 0, z: 0}
+  RayLen: 100
+  Collider: {fileID: 429235493}
+  StartPosition: {x: 0, y: 0, z: 0}
+  DebugLineLen: 20
+--- !u!114 &429235499
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 429235492}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 53dc58bcd69654f45b026d6fee85830e, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: 
+  Mass: 1
+  SlopeLimit: 45
+  PotentialLostRatio: 0.1
+  Gravity: 0.098
+  Friction: 0.1
+  FrictionRatio: 0.1
+  RollingFrictionRatio: 0.025
+  AirFriction: 0.01
+  OnGround: 0
+  CurrentGround: {fileID: 0}
+  CurrGroundNormal: {x: 0, y: 1, z: 0}
+  Acceleration: {x: 0, y: 0, z: 0}
+  AccelerationFriction: {x: 0, y: 0, z: 0}
+  AccelerationLen: 0
+  AccelerationDeadZone: 0.00001
+  Velocity: {x: 0, y: 0, z: 0}
+  VelocityLen: 0
+  VelocityDeadZone: 0.00001
   PrevPosition: {x: 0, y: 0, z: 0}
   RayLen: 100
   Collider: {fileID: 429235493}
@@ -529,13 +566,13 @@ Transform:
   m_PrefabInstance: {fileID: 0}
   m_PrefabAsset: {fileID: 0}
   m_GameObject: {fileID: 960449659}
-  m_LocalRotation: {x: 0.40821788, y: -0.23456968, z: 0.10938163, w: 0.8754261}
+  m_LocalRotation: {x: 0.7071068, y: 0, z: 0, w: 0.7071068}
   m_LocalPosition: {x: 0, y: 3, z: 0}
   m_LocalScale: {x: 1, y: 1, z: 1}
   m_Children: []
   m_Father: {fileID: 0}
   m_RootOrder: 1
-  m_LocalEulerAnglesHint: {x: 50, y: -30, z: 0}
+  m_LocalEulerAnglesHint: {x: 90, y: 0, z: 0}
 --- !u!1001 &1093429541
 PrefabInstance:
   m_ObjectHideFlags: 0
@@ -565,11 +602,11 @@ PrefabInstance:
       objectReference: {fileID: 0}
     - target: {fileID: 3960822531915087712, guid: 9e4e615387cb39945b180840d686188f, type: 3}
       propertyPath: m_LocalRotation.w
-      value: 0.94264156
+      value: 0.8660254
       objectReference: {fileID: 0}
     - target: {fileID: 3960822531915087712, guid: 9e4e615387cb39945b180840d686188f, type: 3}
       propertyPath: m_LocalRotation.x
-      value: -0.33380687
+      value: -0.5
       objectReference: {fileID: 0}
     - target: {fileID: 3960822531915087712, guid: 9e4e615387cb39945b180840d686188f, type: 3}
       propertyPath: m_LocalRotation.y
@@ -581,7 +618,7 @@ PrefabInstance:
       objectReference: {fileID: 0}
     - target: {fileID: 3960822531915087712, guid: 9e4e615387cb39945b180840d686188f, type: 3}
       propertyPath: m_LocalEulerAnglesHint.x
-      value: -39
+      value: -60
       objectReference: {fileID: 0}
     - target: {fileID: 3960822531915087712, guid: 9e4e615387cb39945b180840d686188f, type: 3}
       propertyPath: m_LocalEulerAnglesHint.y

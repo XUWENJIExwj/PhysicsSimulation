@@ -291,6 +291,12 @@ public class MyPhysics : MonoBehaviour
         {
             CurrentGround = RayHitInfoOnGround.transform;
             CurrGroundNormal = RayHitInfoOnGround.normal;
+
+            if (Mathf.Abs(Velocity.y) > 0.0f)
+            {
+                Velocity.y *= -1;
+                Velocity *= 1.0f - PotentialLostRatio;
+            }
             OnGround = true;
         }
 

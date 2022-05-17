@@ -4,7 +4,8 @@ using UnityEngine;
 
 public class Ball : MonoBehaviour
 {
-    public MyPhysics BallPhysics;
+    public MyPhysics MyPhysic;
+    public BallPhysics BallPhysic;
     public float Power;
 
     // Start is called before the first frame update
@@ -30,7 +31,7 @@ public class Ball : MonoBehaviour
         }
         if (Input.GetKeyDown(KeyCode.J))
         {
-            BallPhysics.AddForce(Power, transform.forward);
+            BallPhysic.AddForce(Power, transform.forward);
         }
     }
 }
