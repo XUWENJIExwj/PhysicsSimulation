@@ -392,7 +392,7 @@ Transform:
   m_PrefabAsset: {fileID: 0}
   m_GameObject: {fileID: 429235492}
   m_LocalRotation: {x: 0, y: 0, z: 0, w: 1}
-  m_LocalPosition: {x: 0, y: 5.86, z: 1.62}
+  m_LocalPosition: {x: 0, y: 7, z: 1.62}
   m_LocalScale: {x: 1, y: 1, z: 1}
   m_Children: []
   m_Father: {fileID: 0}
@@ -459,22 +459,23 @@ MonoBehaviour:
   m_EditorClassIdentifier: 
   Mass: 1
   SlopeLimit: 45
-  PotentialLostRatio: 0.1
+  PotentialLostRatio: 0.25
   Gravity: 0.098
-  Friction: 0.1
+  Friction: 0
   FrictionRatio: 0.1
   RollingFrictionRatio: 0.025
-  AirFriction: 0.01
+  AirFriction: 0.001
   OnGround: 0
   CurrentGround: {fileID: 0}
   CurrGroundNormal: {x: 0, y: 1, z: 0}
   Acceleration: {x: 0, y: 0, z: 0}
-  AccelerationFriction: {x: 0, y: 0, z: 0}
   AccelerationLen: 0
-  AccelerationDeadZone: 0.00001
+  AccelerationFriction: {x: 0, y: 0, z: 0}
+  AccelerationFrictionLen: 0
+  AccelerationDeadZone: 0.001
   Velocity: {x: 0, y: 0, z: 0}
   VelocityLen: 0
-  VelocityDeadZone: 0.00001
+  VelocityDeadZone: 0.001
   PrevPosition: {x: 0, y: 0, z: 0}
   RayLen: 100
   Collider: {fileID: 429235493}
