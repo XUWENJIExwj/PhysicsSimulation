@@ -392,7 +392,7 @@ Transform:
   m_PrefabAsset: {fileID: 0}
   m_GameObject: {fileID: 429235492}
   m_LocalRotation: {x: 0, y: 0, z: 0, w: 1}
-  m_LocalPosition: {x: 0, y: 7, z: 1.62}
+  m_LocalPosition: {x: 0, y: 1, z: 0}
   m_LocalScale: {x: 1, y: 1, z: 1}
   m_Children: []
   m_Father: {fileID: 0}
@@ -466,8 +466,11 @@ MonoBehaviour:
   RollingFrictionRatio: 0.025
   AirFriction: 0.001
   OnGround: 0
-  CurrentGround: {fileID: 0}
+  OnHit: 0
+  CurrGround: {fileID: 0}
   CurrGroundNormal: {x: 0, y: 1, z: 0}
+  PrevGround: {fileID: 0}
+  PrevGroundNormal: {x: 0, y: 1, z: 0}
   Acceleration: {x: 0, y: 0, z: 0}
   AccelerationLen: 0
   AccelerationFriction: {x: 0, y: 0, z: 0}
@@ -480,6 +483,7 @@ MonoBehaviour:
   RayLen: 100
   Collider: {fileID: 429235493}
   StartPosition: {x: 0, y: 0, z: 0}
+  Bias: 0.001
   DebugLineLen: 20
 --- !u!1 &960449659
 GameObject:

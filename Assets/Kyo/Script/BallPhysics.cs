@@ -13,8 +13,11 @@ public class BallPhysics : MonoBehaviour
     public float RollingFrictionRatio = 0.025f; // 転がる時の摩擦力は通常の摩擦力の1/60～1/40になると言われている
     public float AirFriction = 0.001f; // 空気抵抗力
     public bool OnGround = false; // 接地フラグ
-    public Transform CurrentGround; // 現在接地している平面
+    public bool OnHit = false; // 進行先の平面との衝突フラグ
+    public Transform CurrGround; // 現在接地している平面
     public Vector3 CurrGroundNormal = Vector3.up; // 現在接地している平面の法線
+    public Transform PrevGround; // 前に接地している平面
+    public Vector3 PrevGroundNormal = Vector3.up; // 前に接地している平面の法線
     public Vector3 Acceleration = Vector3.zero; // 重力などの移動を促す外力による加速度
     public float AccelerationLen = 0.0f; // 重力などの移動を促す外力による加速度の大きさ
     public Vector3 AccelerationFriction = Vector3.zero; // 摩擦力、空気抵抗力などの移動を邪魔する外力による加速度
@@ -31,6 +34,7 @@ public class BallPhysics : MonoBehaviour
     public float RayLen = 100.0f;
     public SphereCollider Collider;
     public Vector3 StartPosition;
+    public float Bias = 0.001f;
     public float DebugLineLen = 20.0f;
 
     // Start is called before the first frame update
@@ -47,7 +51,7 @@ public class BallPhysics : MonoBehaviour
         {
             if (RayHitInfoOnGround.distance <= Collider.radius)
             {
-                CurrentGround = RayHitInfoOnGround.transform;
+                CurrGround = RayHitInfoOnGround.transform;
                 CurrGroundNormal = RayHitInfoOnGround.normal;
                 OnGround = true;
             }
@@ -65,6 +69,11 @@ public class BallPhysics : MonoBehaviour
         UpdatePhysics();
     }
 
+    private void LateUpdate()
+    {
+        
+    }
+
     public void AddForce(float power, Vector3 direction)
     {
         Acceleration = direction * power / Mass;
@@ -75,10 +84,10 @@ public class BallPhysics : MonoBehaviour
     public void UpdatePhysics()
     {
         // 静止状態だと更新不要
-        if (IsStop())
-        {
-            return;
-        }
+        //if (IsStop())
+        //{
+        //    return;
+        //}
 
         // 加速度と速度の更新
         UpdateAccelerationAndVelocity();
@@ -109,13 +118,11 @@ public class BallPhysics : MonoBehaviour
             // 水平面の場合、Sin = 0なので、影響を受けない
             // 斜面の場合、0 < Sin < 1、部分的に受ける
             // 垂直面の場合、 Sin = 1、影響を全部受ける
-            // 方向は該当平面と水平面の法線との外積を求めたベクトルを軸に
-            // 90度回転したベクトルになる
             float sin = 0.0f;
             Vector3 travelling = Vector3.zero;
             // Cos = 1の場合、水平面上にいるので、重力による滑る力がない
             // 滑る力を計算する必要がなくなる
-            if (cos < 1.0f)
+            if (cos < 1.0f - Bias)
             {
                 sin = Mathf.Sqrt(1.0f - cos * cos);
                 // 水平面の法線と現在の平面の法線の外積を求める
@@ -137,7 +144,7 @@ public class BallPhysics : MonoBehaviour
 
             // 水平面にいて、更新後に停止と判断した場合
             // 速度と加速度全部0にして、停止状態にする
-            if (CheckAndSetVelocityInfoAfterCancelOut(cos, Velocity, Velocity + AccelerationFriction))
+            if (CheckAndSetVelocityInfoAfterCancelOut(Velocity, Velocity + AccelerationFriction))
             {
                 return;
             }
@@ -148,7 +155,7 @@ public class BallPhysics : MonoBehaviour
 
             // 水平面にいて、更新後に停止と判断した場合
             // 速度と加速度全部0にして、停止状態にする
-            if (CheckAndSetVelocityInfoAfterCancelOut(cos, Velocity, Velocity + AccelerationFriction))
+            if (CheckAndSetVelocityInfoAfterCancelOut(Velocity, Velocity + AccelerationFriction))
             {
                 return;
             }
@@ -240,6 +247,7 @@ public class BallPhysics : MonoBehaviour
         transform.position += Velocity * Time.deltaTime;
 
         CheckOnCurrentGround();
+        CheckMoveDirectionOnHit();
     }
 
     // 平面にいるかをチェックする
@@ -254,49 +262,186 @@ public class BallPhysics : MonoBehaviour
         RayOnGround.origin = transform.position;
         Physics.Raycast(RayOnGround, out RayHitInfoOnGround, RayLen, LayerMask.GetMask("Stage"));
 
-        // 現在の平面との距離がBallの半径以下だと、当たったと判断できる
-        if (RayHitInfoOnGround.distance <= Collider.radius)
+        // 現在の平面との距離がBallの半径以上だと、当たらなかったと判断できる
+        // それ以降の処理が不要
+        if (RayHitInfoOnGround.distance > Collider.radius)
         {
-            CurrentGround = RayHitInfoOnGround.transform;
-            CurrGroundNormal = RayHitInfoOnGround.normal;
+            return OnGround;
+        }
 
-            // 速度の方向を平面の法線をもとに反射する
-            // 速度の方向が平面と平行している場合、反射しても変わらない
-            // 速度の方向が平面と平行していない場合、平面に突入してきたことがわかる
-            // そのため、反射後の速度の方向は地面から離れる
-            Velocity = Vector3.Reflect(Velocity, CurrGroundNormal);
+        // 現在の平面との距離がBallの半径以下だと、当たったと判断できる
+        // 接地情報を更新する
+        CurrGround = RayHitInfoOnGround.transform;
+        CurrGroundNormal = RayHitInfoOnGround.normal;
 
-            // 平面に突入してきた場合のみ、エネルギーの損失を反映する
-            // 速度の方向と平面の法線の内積で、損失率を0～PotentialLostRatioにする
-            float dot = Vector3.Dot(Velocity.normalized, CurrGroundNormal);
-            Velocity *= 1 - PotentialLostRatio * dot;
+        // 速度の方向を平面の法線をもとに反射する
+        // 速度の方向が平面と平行している場合、反射しても変わらない
+        // 速度の方向が平面と平行していない場合、平面に突入してきたことがわかる
+        // そのため、反射後の速度の方向は地面から離れる
+        Velocity = Vector3.Reflect(Velocity, CurrGroundNormal);
+        VelocityLen = Velocity.magnitude;
 
-            // 速度が反射によって変更されたので、その場で停止状態に満たすかをチェック
-            // 現在の平面と水平面の角度のCosを求める
-            float cos = Vector3.Dot(CurrGroundNormal, Vector3.up);
+        // 平面に突入してきた場合のみ、エネルギーの損失を反映する
+        // 速度の方向と平面の法線の内積で、損失率を0～PotentialLostRatioにする
+        float dot = Vector3.Dot(Velocity.normalized, CurrGroundNormal);
+        Velocity *= 1 - PotentialLostRatio * dot;
+
+        // 速度が反射によって変更されたので、その場で停止状態に満たすかをチェック
+        // 現在の平面と水平面の角度のCosを求める
+        float cos = Vector3.Dot(CurrGroundNormal, Vector3.up);
+        float mass = 1.0f / Mass;
+
+        // 重力を計算し、停止状態をチェック
+        Vector3 gravity = Vector3.down * Gravity;
+        CheckAndSetVelocityInfoAfterCancelOut(Velocity, Velocity + gravity);
+
+        // 空気抵抗力を計算し、停止状態をチェック
+        Vector3 airfriction = ComputeAirFriction(mass);
+        CheckAndSetVelocityInfoAfterCancelOut(Velocity, Velocity + airfriction);
+
+        // 摩擦力を計算し、停止状態をチェック
+        Vector3 friction = ComputeFriction(mass, cos);
+        CheckAndSetVelocityInfoAfterCancelOut(Velocity, Velocity + friction);
+
+        // めり込みを補正する
+        var pos = transform.position;
+        pos = RayHitInfoOnGround.point + RayHitInfoOnGround.normal * Collider.radius;
+        transform.position = pos;
+
+        OnGround = true;
+
+        return OnGround;
+    }
+
+    // 進行先のあたりチェック
+    public bool CheckMoveDirectionOnHit()
+    {
+        OnHit = false;
+
+        RayMoveDir.direction = Velocity.normalized;
+        RayMoveDir.origin = transform.position;
+
+        //// 進行方向と接地チェック時のRaycast方向が同じであるかをチェック
+        //// 同じの場合、すでにチェック済みなので、再チェックが不要
+        float dot = Vector3.Dot(RayMoveDir.direction, RayOnGround.direction);
+        if (dot >= 1.0f - Bias)
+        {
+            OnHit = OnGround;
+            return OnHit;
+        }
+
+        // Raycastする
+        // 進行先に平面などがない場合、それ以降の処理が不要
+        if (!Physics.Raycast(RayMoveDir, out RayHitInfoMoveDir, RayLen, LayerMask.GetMask("Stage")))
+        {
+            return OnHit;
+        }
+
+        // 進行先に平面がある場合、その平面の法線の逆方向をRayとして、RayCastで衝突する平面を取得
+        Transform targetTransform = RayHitInfoMoveDir.transform;
+        RayMoveDir.direction = -RayHitInfoMoveDir.normal;
+
+        // 進行先の平面の法線の逆方向でRayCastする
+        Physics.Raycast(RayMoveDir, out RayHitInfoMoveDir, RayLen, LayerMask.GetMask("Stage"));
+
+        // 衝突する平面が先のRayCastでの衝突する平面と同じでなければ、これ以降の処理が不要になる
+        if (targetTransform != RayHitInfoMoveDir.transform)
+        {
+            return OnHit;
+        }
+
+        // 衝突する平面との距離がBallの半径以上だと、当たらなかったと判断できる
+        // それ以降の処理が不要
+        if (RayHitInfoMoveDir.distance > Collider.radius - Bias)
+        {
+            return OnHit;
+        }
+
+        // 衝突した平面が先のRayCastでの衝突する平面と同じであれば、間もなく衝突と判断できる
+        // 登れる平面の最大角度のcosを求める
+        // 衝突した平面の法線をもとに、進行方向を反射させる
+        // 反射後のベクトルと衝突した平面の法線との内積を求める
+        // 求めた内積が求めたcosより小さい場合、平面に登れると判断できる
+        // 衝突した平面が水平面の場合、そのまま反射処理をする
+        // どちらも、平面と衝突したので、cosをもって損失率を0～PotentialLostRatioにする
+        float cos = Mathf.Cos(SlopeLimit * Mathf.Deg2Rad);
+        Velocity *= 1 - PotentialLostRatio * cos;
+        Vector3 reflectVel = Vector3.Reflect(Velocity, RayHitInfoMoveDir.normal);
+        dot = Vector3.Dot(reflectVel.normalized, RayHitInfoMoveDir.normal);
+        // 登れる場合、CurrentGroundとCurrGroundNormalの更新準備に入る
+        if (dot <= cos + Bias)
+        {
+            // 衝突した平面に登る瞬間速度の大きさはそのまま、
+            // 方向が平面と平行するように変わる
+            // 速度の回転軸は現在の平面と衝突した平面との外積になる
+            // 現在の平面と衝突した平面との角度を内積で求める
+            // 速度を求めた外積を軸に、求めた角度分回転させると、
+            // 平面を登れた後の速度となる
+            Vector3 axis = Vector3.Cross(CurrGroundNormal, RayHitInfoMoveDir.normal);
+            cos = Vector3.Dot(CurrGroundNormal, RayHitInfoMoveDir.normal);
+            float angle = Mathf.Rad2Deg * Mathf.Acos(cos);
+
+            Velocity = Quaternion.AngleAxis(angle, axis.normalized) * Velocity;
+            VelocityLen = Velocity.magnitude;
+
+            // 速度が回転によって変更されたので、その場で停止状態に満たすかをチェック
+            // 衝突した平面と水平面の角度のCosを求める
+            cos = Vector3.Dot(RayHitInfoMoveDir.normal, Vector3.up);
             float mass = 1.0f / Mass;
 
             // 重力を計算し、停止状態をチェック
             Vector3 gravity = Vector3.down * Gravity;
-            CheckAndSetVelocityInfoAfterCancelOut(cos, Velocity, Velocity + gravity);
+            CheckAndSetVelocityInfoAfterCancelOut(Velocity, Velocity + gravity);
 
             // 空気抵抗力を計算し、停止状態をチェック
             Vector3 airfriction = ComputeAirFriction(mass);
-            CheckAndSetVelocityInfoAfterCancelOut(cos, Velocity, Velocity + airfriction);
+            CheckAndSetVelocityInfoAfterCancelOut(Velocity, Velocity + airfriction);
 
             // 摩擦力を計算し、停止状態をチェック
             Vector3 friction = ComputeFriction(mass, cos);
-            CheckAndSetVelocityInfoAfterCancelOut(cos, Velocity, Velocity + friction);
+            CheckAndSetVelocityInfoAfterCancelOut(Velocity, Velocity + friction);
 
-            // めり込みを補正する
-            var pos = transform.position;
-            pos = RayHitInfoOnGround.point + RayHitInfoOnGround.normal * Collider.radius;
-            transform.position = pos;
-
+            CurrGround = RayHitInfoMoveDir.transform;
+            CurrGroundNormal = RayHitInfoMoveDir.normal;
             OnGround = true;
         }
+        // 登れない場合、反射処理
+        else
+        {
+            Velocity = reflectVel;
+            VelocityLen = Velocity.magnitude;
 
-        return OnGround;
+            // 速度が反射によって変更されたので、その場で停止状態に満たすかをチェック
+            // 衝突した平面と水平面の角度のCosを求める
+            cos = Vector3.Dot(RayHitInfoMoveDir.normal, Vector3.up);
+            float mass = 1.0f / Mass;
+
+            // 重力を計算し、停止状態をチェック
+            Vector3 gravity = Vector3.down * Gravity;
+            CheckAndSetVelocityInfoAfterCancelOut(Velocity, Velocity + gravity);
+
+            // 空気抵抗力を計算し、停止状態をチェック
+            Vector3 airfriction = ComputeAirFriction(mass);
+            CheckAndSetVelocityInfoAfterCancelOut(Velocity, Velocity + airfriction);
+
+            // 摩擦力を計算し、停止状態をチェック
+            Vector3 friction = ComputeFriction(mass, cos);
+            CheckAndSetVelocityInfoAfterCancelOut(Velocity, Velocity + friction);
+
+            //CurrGround = RayHitInfoMoveDir.transform;
+            //CurrGroundNormal = RayHitInfoMoveDir.normal;
+            OnGround = false;
+        }
+
+        // めり込みを補正する
+        var pos = transform.position;
+        pos = RayHitInfoMoveDir.point + RayHitInfoMoveDir.normal * Collider.radius;
+        transform.position = pos;
+
+        OnHit = true;
+
+        return OnHit;
+
     }
 
     // 静止条件：
@@ -317,13 +462,12 @@ public class BallPhysics : MonoBehaviour
     {
         return 
             (after * Time.deltaTime).magnitude <= VelocityDeadZone ||
-            Vector3.Dot(before.normalized, -after.normalized) >= 1.0f;
+            Vector3.Dot(before.normalized, -after.normalized) >= 1.0f - Bias;
     }
-
 
     // 水平面にいて、更新後に停止と判断した場合
     // 速度と加速度全部0にして、停止状態にして、trueを返す
-    public bool CheckAndSetVelocityInfoAfterCancelOut(float cos, Vector3 before, Vector3 after)
+    public bool CheckAndSetVelocityInfoAfterCancelOut(Vector3 before, Vector3 after)
     {
         if (IsStopAfterCancelOut(before, after))
         {
@@ -332,6 +476,8 @@ public class BallPhysics : MonoBehaviour
             Acceleration = Vector3.zero;
             AccelerationFriction = Vector3.zero;
             AccelerationLen = 0.0f;
+
+            OnGround = true;
             return true;
         }
         return false;
@@ -355,5 +501,7 @@ public class BallPhysics : MonoBehaviour
         Debug.DrawLine(transform.position, transform.position + dir * DebugLineLen, Color.green);
         //Left
         Debug.DrawLine(transform.position, transform.position + -dir * DebugLineLen, Color.yellow);
+
+        Debug.DrawLine(transform.position, transform.position + Velocity.normalized * DebugLineLen, Color.black);
     }
 }
