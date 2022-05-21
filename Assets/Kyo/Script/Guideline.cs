@@ -29,14 +29,6 @@ public class Guideline : MonoBehaviour
         // Quaternion * VecÇ≈ÅAVecÇâÒì]Ç≥ÇπÇÈ
         Vector3 dir = transform.localRotation * Vector3.forward;
         // Forwad
-        Debug.DrawLine(transform.position, transform.position + dir * DebugLineLen, Color.blue);
-      
-        dir = transform.localRotation * Vector3.right;
-        // Right
-        Debug.DrawLine(transform.position, transform.position + dir * DebugLineLen, Color.green);
-
-        dir = transform.localRotation * Vector3.up;
-        // Up
-        Debug.DrawLine(transform.position, transform.position + dir * DebugLineLen, Color.yellow);
+        Debug.DrawLine(transform.position, transform.position + dir * DebugLineLen, Color.black);
     }
 }

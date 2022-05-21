@@ -25,9 +25,16 @@ public class BallPhysics : MonoBehaviour
     public Vector3 AccelerationFriction = Vector3.zero; // 摩擦力、空気抵抗力などの移動を邪魔する外力による加速度
     public float AccelerationFrictionLen = 0.0f; // 摩擦力、空気抵抗力などの移動を邪魔する外力による加速度の大きさ
     public float AccelerationDeadZone = 0.00001f; // 加速度のDeadZone
-    public Vector3 Velocity = Vector3.zero; // 速度
-    public float VelocityLen = 0.0f; // 速度の大きさ
-    public float VelocityDeadZone = 0.00001f; // 速度のDeadZone
+    public Vector3 LinearVelocity = Vector3.zero; // 速度
+    public float LinearVelocityLen = 0.0f; // 速度の大きさ
+    public float LinearVelocityDeadZone = 0.00001f; // 速度のDeadZone
+    public Vector3 AngularVelocity = Vector3.zero; // 角速度
+    public float AngularVelocityLen = 0.0f; // 角速度の大きさ
+    public float AngularVelocityDeadZone = 0.00001f; // 角速度のDeadZone
+    public Quaternion LinearVelocityRotation; // 進行中のRotation
+    public Vector3 LinearFoward;
+    public Vector3 LinearRight;
+    public Vector3 LinearUp;
     public Vector3 PrevPosition;
     public Ray RayMoveDir;
     public RaycastHit RayHitInfoMoveDir;
@@ -46,6 +53,10 @@ public class BallPhysics : MonoBehaviour
 
         RayOnGround.direction = Vector3.down;
         RayOnGround.origin = transform.position;
+
+        LinearFoward = transform.forward;
+        LinearRight = transform.right;
+        LinearUp = transform.up;
 
         // 周りのすべての平面をチェックするべき
         // 現在は真下の平面しかチェックしていない
@@ -73,14 +84,15 @@ public class BallPhysics : MonoBehaviour
 
     private void LateUpdate()
     {
+        UpdateAngular();
         DebugLine();
     }
 
     public void AddForce(float power, Vector3 direction)
     {
         Acceleration = direction * power / Mass;
-        Velocity += Acceleration;
-        VelocityLen = Velocity.magnitude;
+        LinearVelocity += Acceleration;
+        LinearVelocityLen = LinearVelocity.magnitude;
     }
 
     public void UpdatePhysics()
@@ -93,6 +105,9 @@ public class BallPhysics : MonoBehaviour
 
         // 加速度と速度の更新
         UpdateAccelerationAndVelocity();
+
+        // 回転の更新
+        UpdateAngular();
 
         // 位置情報、接地情報を更新する
         UpdateTransform();
@@ -138,15 +153,15 @@ public class BallPhysics : MonoBehaviour
             AccelerationLen = Acceleration.magnitude;
 
             // 速度を更新して摩擦力、空気抵抗力が作用する方向を取得する
-            Velocity += Acceleration;
-            VelocityLen = Velocity.magnitude;
+            LinearVelocity += Acceleration;
+            LinearVelocityLen = LinearVelocity.magnitude;
 
             // 空気抵抗力の計算
             AccelerationFriction += ComputeAirFriction(mass);
 
             // 水平面にいて、更新後に停止と判断した場合
             // 速度と加速度全部0にして、停止状態にする
-            if (CheckAndSetVelocityInfoAfterCancelOut(Velocity, Velocity + AccelerationFriction))
+            if (CheckAndSetVelocityInfoAfterCancelOut(LinearVelocity, LinearVelocity + AccelerationFriction))
             {
                 return;
             }
@@ -157,17 +172,17 @@ public class BallPhysics : MonoBehaviour
 
             // 水平面にいて、更新後に停止と判断した場合
             // 速度と加速度全部0にして、停止状態にする
-            if (CheckAndSetVelocityInfoAfterCancelOut(Velocity, Velocity + AccelerationFriction))
+            if (CheckAndSetVelocityInfoAfterCancelOut(LinearVelocity, LinearVelocity + AccelerationFriction))
             {
                 return;
             }
 
             // AccelerationFrictionを更新できたら、速度を更新する
-            Velocity += AccelerationFriction;
+            LinearVelocity += AccelerationFriction;
 
             // Ballが転がる間も、変形するので、エネルギー損失率をかける
-            Velocity *= 1 - PotentialLostRatio * Time.deltaTime;
-            VelocityLen = Velocity.magnitude;
+            LinearVelocity *= 1 - PotentialLostRatio * Time.deltaTime;
+            LinearVelocityLen = LinearVelocity.magnitude;
         }
         // 接地していない場合
         else
@@ -178,8 +193,8 @@ public class BallPhysics : MonoBehaviour
             AccelerationLen = Acceleration.magnitude;
 
             // 速度を更新して空気抵抗力が作用する方向を取得する
-            Velocity += Acceleration;
-            VelocityLen = Velocity.magnitude;
+            LinearVelocity += Acceleration;
+            LinearVelocityLen = LinearVelocity.magnitude;
 
             // 空気抵抗力
             // 方向は速度の逆方向
@@ -187,8 +202,8 @@ public class BallPhysics : MonoBehaviour
             AccelerationFrictionLen = AccelerationFriction.magnitude;
 
             // AccelerationFrictionを更新できたら、速度を更新する
-            Velocity += AccelerationFriction;
-            VelocityLen = Velocity.magnitude;
+            LinearVelocity += AccelerationFriction;
+            LinearVelocityLen = LinearVelocity.magnitude;
         }
     }
 
@@ -197,7 +212,7 @@ public class BallPhysics : MonoBehaviour
     {
         // 空気抵抗力
         // 方向は速度の逆方向
-        Vector3 airFrictionVec = -Velocity.normalized;
+        Vector3 airFrictionVec = -LinearVelocity.normalized;
 
         return airFrictionVec * AirFriction * mass;
     }
@@ -230,28 +245,30 @@ public class BallPhysics : MonoBehaviour
         // どのパターンでも、速度の方向と現在の平面の法線との外積を求める
         // 求めた外積と現在の平面の法線との外積を求める
         // 最後に求めた外積は摩擦力の方向となる
-        Vector3 frictionVec = Vector3.Cross(Velocity.normalized, CurrGroundNormal);
+        Vector3 frictionVec = Vector3.Cross(LinearVelocity.normalized, CurrGroundNormal);
         frictionVec = Vector3.Cross(frictionVec.normalized, CurrGroundNormal);
 
         return frictionVec * Friction * mass;
     }
 
     // 位置情報、接地情報を更新する
-    public void UpdateTransform()
+    public Vector3 UpdateTransform()
     {
         // 速度や加速度が更新後、静止条件を満たす場合がある
         // 静止状態だと更新不要
         if (IsStop())
         {
-            return;
+            return transform.position;
         }
 
         // 位置を更新する
         PrevPosition = transform.position;
-        transform.position += Velocity * Time.deltaTime;
+        transform.position += LinearVelocity * Time.deltaTime;
 
         CheckOnCurrentGround();
         CheckMoveDirectionOnHit();
+
+        return transform.position;
     }
 
     // 平面にいるかをチェックする
@@ -288,13 +305,13 @@ public class BallPhysics : MonoBehaviour
         // 速度の方向が平面と平行している場合、反射しても変わらない
         // 速度の方向が平面と平行していない場合、平面に突入してきたことがわかる
         // そのため、反射後の速度の方向は地面から離れる
-        Velocity = Vector3.Reflect(Velocity, CurrGroundNormal);
-        VelocityLen = Velocity.magnitude;
+        LinearVelocity = Vector3.Reflect(LinearVelocity, CurrGroundNormal);
+        LinearVelocityLen = LinearVelocity.magnitude;
 
         // 平面に突入してきた場合のみ、エネルギーの損失を反映する
         // 速度の方向と平面の法線の内積で、損失率を0～PotentialLostRatioにする
-        float dot = Vector3.Dot(Velocity.normalized, CurrGroundNormal);
-        Velocity *= 1 - PotentialLostRatio * dot;
+        float dot = Vector3.Dot(LinearVelocity.normalized, CurrGroundNormal);
+        LinearVelocity *= 1 - PotentialLostRatio * dot;
 
         // 速度が反射によって変更されたので、その場で停止状態に満たすかをチェック
         // 現在の平面と水平面の角度のCosを求める
@@ -303,15 +320,15 @@ public class BallPhysics : MonoBehaviour
 
         // 重力を計算し、停止状態をチェック
         Vector3 gravity = Vector3.down * Gravity;
-        CheckAndSetVelocityInfoAfterCancelOut(Velocity, Velocity + gravity);
+        CheckAndSetVelocityInfoAfterCancelOut(LinearVelocity, LinearVelocity + gravity);
 
         // 空気抵抗力を計算し、停止状態をチェック
         Vector3 airfriction = ComputeAirFriction(mass);
-        CheckAndSetVelocityInfoAfterCancelOut(Velocity, Velocity + airfriction);
+        CheckAndSetVelocityInfoAfterCancelOut(LinearVelocity, LinearVelocity + airfriction);
 
         // 摩擦力を計算し、停止状態をチェック
         Vector3 friction = ComputeFriction(mass, cos);
-        CheckAndSetVelocityInfoAfterCancelOut(Velocity, Velocity + friction);
+        CheckAndSetVelocityInfoAfterCancelOut(LinearVelocity, LinearVelocity + friction);
 
         // めり込みを補正する
         var pos = transform.position;
@@ -328,7 +345,7 @@ public class BallPhysics : MonoBehaviour
     {
         OnHit = false;
 
-        RayMoveDir.direction = Velocity.normalized;
+        RayMoveDir.direction = LinearVelocity.normalized;
         RayMoveDir.origin = transform.position;
 
         //// 進行方向と接地チェック時のRaycast方向が同じであるかをチェック
@@ -377,8 +394,8 @@ public class BallPhysics : MonoBehaviour
         // 衝突した平面が水平面の場合、そのまま反射処理をする
         // どちらも、平面と衝突したので、cosをもって損失率を0～PotentialLostRatioにする
         float cos = Mathf.Cos(SlopeLimit * Mathf.Deg2Rad);
-        Velocity *= 1 - PotentialLostRatio * cos;
-        Vector3 reflectVel = Vector3.Reflect(Velocity, RayHitInfoMoveDir.normal);
+        LinearVelocity *= 1 - PotentialLostRatio * cos;
+        Vector3 reflectVel = Vector3.Reflect(LinearVelocity, RayHitInfoMoveDir.normal);
         dot = Vector3.Dot(reflectVel.normalized, RayHitInfoMoveDir.normal);
         // 登れる場合、CurrentGroundとCurrGroundNormalの更新準備に入る
         if (dot <= cos + Bias)
@@ -393,8 +410,8 @@ public class BallPhysics : MonoBehaviour
             cos = Vector3.Dot(CurrGroundNormal, RayHitInfoMoveDir.normal);
             float angle = Mathf.Rad2Deg * Mathf.Acos(cos);
 
-            Velocity = Quaternion.AngleAxis(angle, axis.normalized) * Velocity;
-            VelocityLen = Velocity.magnitude;
+            LinearVelocity = Quaternion.AngleAxis(angle, axis.normalized) * LinearVelocity;
+            LinearVelocityLen = LinearVelocity.magnitude;
 
             // 速度が回転によって変更されたので、その場で停止状態に満たすかをチェック
             // 衝突した平面と水平面の角度のCosを求める
@@ -403,15 +420,15 @@ public class BallPhysics : MonoBehaviour
 
             // 重力を計算し、停止状態をチェック
             Vector3 gravity = Vector3.down * Gravity;
-            CheckAndSetVelocityInfoAfterCancelOut(Velocity, Velocity + gravity);
+            CheckAndSetVelocityInfoAfterCancelOut(LinearVelocity, LinearVelocity + gravity);
 
             // 空気抵抗力を計算し、停止状態をチェック
             Vector3 airfriction = ComputeAirFriction(mass);
-            CheckAndSetVelocityInfoAfterCancelOut(Velocity, Velocity + airfriction);
+            CheckAndSetVelocityInfoAfterCancelOut(LinearVelocity, LinearVelocity + airfriction);
 
             // 摩擦力を計算し、停止状態をチェック
             Vector3 friction = ComputeFriction(mass, cos);
-            CheckAndSetVelocityInfoAfterCancelOut(Velocity, Velocity + friction);
+            CheckAndSetVelocityInfoAfterCancelOut(LinearVelocity, LinearVelocity + friction);
 
             // 接地情報を更新する
             SetGroundInfo(RayHitInfoMoveDir.transform, RayHitInfoMoveDir.normal);
@@ -420,8 +437,8 @@ public class BallPhysics : MonoBehaviour
         // 登れない場合、反射処理
         else
         {
-            Velocity = reflectVel;
-            VelocityLen = Velocity.magnitude;
+            LinearVelocity = reflectVel;
+            LinearVelocityLen = LinearVelocity.magnitude;
 
             // 速度が反射によって変更されたので、その場で停止状態に満たすかをチェック
             // 衝突した平面と水平面の角度のCosを求める
@@ -430,11 +447,11 @@ public class BallPhysics : MonoBehaviour
 
             // 空気抵抗力を計算し、停止状態をチェック
             Vector3 airfriction = ComputeAirFriction(mass);
-            CheckAndSetVelocityInfoAfterCancelOut(Velocity, Velocity + airfriction);
+            CheckAndSetVelocityInfoAfterCancelOut(LinearVelocity, LinearVelocity + airfriction);
 
             // 摩擦力を計算し、停止状態をチェック
             Vector3 friction = ComputeFriction(mass, cos);
-            CheckAndSetVelocityInfoAfterCancelOut(Velocity, Velocity + friction);
+            CheckAndSetVelocityInfoAfterCancelOut(LinearVelocity, LinearVelocity + friction);
 
             // 平面が垂直面の場合、反射しても重力をチェックする必要がない
             // 接地情報を更新する必要もない
@@ -443,7 +460,7 @@ public class BallPhysics : MonoBehaviour
             {
                 // 重力を計算し、停止状態をチェック
                 Vector3 gravity = Vector3.down * Gravity;
-                CheckAndSetVelocityInfoAfterCancelOut(Velocity, Velocity + gravity);
+                CheckAndSetVelocityInfoAfterCancelOut(LinearVelocity, LinearVelocity + gravity);
 
                 // 接地情報を更新する
                 SetGroundInfo(RayHitInfoMoveDir.transform, RayHitInfoMoveDir.normal);
@@ -471,9 +488,10 @@ public class BallPhysics : MonoBehaviour
         // その時、VelocityDeadZoneが速度の大きさを超えてしまうと、斜面に停止してしまう
         // 水平面にいる時、速度の大きさがある程度0に近づいたら、早く停止させても大丈夫
         float dot = Vector3.Dot(CurrGroundNormal, Vector3.up);
-        return 
-            Velocity.magnitude <= VelocityDeadZone * dot &&
-            Acceleration.magnitude <= AccelerationDeadZone;
+        bool linearDead = LinearVelocity.magnitude <= LinearVelocityDeadZone * dot;
+        bool angularDead = AngularVelocity.magnitude <= AngularVelocityDeadZone * dot * Mathf.Rad2Deg;
+        bool accelerationDead = Acceleration.magnitude <= AccelerationDeadZone * dot;
+        return linearDead && angularDead && accelerationDead;
     }
 
     // 静止条件：
@@ -482,9 +500,18 @@ public class BallPhysics : MonoBehaviour
     // 摩擦力、空気抵抗力を適用後、要チェック
     public bool IsStopAfterCancelOut(Vector3 before, Vector3 after)
     {
-        return 
-            (after * Time.deltaTime).magnitude <= VelocityDeadZone ||
-            Vector3.Dot(before.normalized, -after.normalized) >= 1.0f - Bias;
+        bool linearDead = (after * Time.deltaTime).magnitude <= LinearVelocityDeadZone;
+        bool angularDead = AngularVelocity.magnitude <= AngularVelocityDeadZone * Mathf.Rad2Deg;
+        bool directionReverse = Vector3.Dot(before.normalized, after.normalized) <= -1.0f + Bias;
+        bool onHorizontal = Vector3.Dot(Vector3.up, CurrGroundNormal) >= 1.0f - Bias;
+        if (onHorizontal)
+        {
+            return linearDead && angularDead && directionReverse;
+        }
+
+        // 水平面ではない場合、加速度の大きさがDeadZone以下になっているかもチェック
+        bool accelerationDead = Acceleration.magnitude <= AccelerationDeadZone;
+        return linearDead && angularDead && directionReverse && accelerationDead;
     }
 
     // 水平面にいて、更新後に停止と判断した場合
@@ -493,11 +520,15 @@ public class BallPhysics : MonoBehaviour
     {
         if (IsStopAfterCancelOut(before, after))
         {
-            Velocity = Vector3.zero;
-            VelocityLen = 0.0f;
             Acceleration = Vector3.zero;
             AccelerationFriction = Vector3.zero;
             AccelerationLen = 0.0f;
+
+            LinearVelocity = Vector3.zero;
+            LinearVelocityLen = 0.0f;
+
+            AngularVelocity = Vector3.zero;
+            AngularVelocityLen = 0.0f;
 
             OnGround = true;
             return true;
@@ -520,9 +551,55 @@ public class BallPhysics : MonoBehaviour
         NextGround = ground;
         NextGroundNormal = normal;
     }
+    
+    // ゴロボールにする
+    public void UpdateAngular()
+    {
+        // 静止状態だと更新不要
+        if (IsStop())
+        {
+            return;
+        }
+
+        // 進行中、進行方向のFoward、Right、Upを求めて、
+        // 進行方向にあったRotationを求める
+        LinearVelocityRotation = ComputeLinearRotation();
+
+        // 角速度と線速度の関係:ω = v / r
+        // ωはラジアンなので、角度に変換する
+        AngularVelocityLen = LinearVelocityLen / Collider.radius * Mathf.Rad2Deg;
+        // 回転軸
+        AngularVelocity = LinearRight;
+        // 回転させる
+        Quaternion rot = Quaternion.AngleAxis(AngularVelocityLen * Time.deltaTime, AngularVelocity);
+        transform.rotation = rot * transform.rotation;
+    }
+
+    // 進行中、進行方向のFoward、Right、Upを求めて、
+    // 進行方向にあったRotationを求める
+    public Quaternion ComputeLinearRotation()
+    {
+        LinearFoward = LinearVelocity.normalized;
+        LinearRight = Vector3.Cross(LinearUp, LinearFoward).normalized;
+        // 接地している時だけ更新
+        // 平面間の移動によって、現在の平面の法線が変わるので
+        if (OnGround)
+        {
+            // 進行方向のRight
+            LinearRight = Vector3.Cross(CurrGroundNormal, LinearFoward).normalized;
+        }
+
+        // 進行方向のUp
+        LinearUp = Vector3.Cross(LinearVelocity.normalized, LinearRight).normalized;
+
+        Quaternion rot = Quaternion.LookRotation(LinearFoward, LinearUp);
+        return rot;
+    }
 
     private void DebugLine()
     {
-        Debug.DrawLine(transform.position, transform.position + Velocity.normalized * DebugLineLen, Color.black);
+        Debug.DrawLine(transform.position, transform.position + LinearFoward * DebugLineLen, Color.blue);
+        Debug.DrawLine(transform.position, transform.position + LinearRight * DebugLineLen, Color.red);
+        Debug.DrawLine(transform.position, transform.position + LinearUp * DebugLineLen, Color.green);
     }
 }
