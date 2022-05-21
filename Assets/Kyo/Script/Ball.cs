@@ -4,8 +4,8 @@ using UnityEngine;
 
 public class Ball : MonoBehaviour
 {
-    public MyPhysics MyPhysic;
     public BallPhysics BallPhysic;
+    public Guideline Guide;
     public float Power;
 
     // Start is called before the first frame update
@@ -19,19 +19,24 @@ public class Ball : MonoBehaviour
     {
         if (Input.GetKey(KeyCode.A))
         {
-            var angle = transform.localEulerAngles;
+            var angle = Guide.transform.localEulerAngles;
             angle.y -= 1.0f;
-            transform.localEulerAngles = angle;
+            Guide.transform.localEulerAngles = angle;
         }
         if (Input.GetKey(KeyCode.D))
         {
-            var angle = transform.localEulerAngles;
+            var angle = Guide.transform.localEulerAngles;
             angle.y += 1.0f;
-            transform.localEulerAngles = angle;
+            Guide.transform.localEulerAngles = angle;
         }
         if (Input.GetKeyDown(KeyCode.J))
         {
-            BallPhysic.AddForce(Power, transform.forward);
+            BallPhysic.AddForce(Power, Guide.transform.forward);
         }
+    }
+
+    private void LateUpdate()
+    {
+        Guide.SetPostion(BallPhysic.transform.position);
     }
 }

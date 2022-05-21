@@ -14,10 +14,12 @@ public class BallPhysics : MonoBehaviour
     public float AirFriction = 0.001f; // 空気抵抗力
     public bool OnGround = false; // 接地フラグ
     public bool OnHit = false; // 進行先の平面との衝突フラグ
-    public Transform CurrGround; // 現在接地している平面
-    public Vector3 CurrGroundNormal = Vector3.up; // 現在接地している平面の法線
     public Transform PrevGround; // 前に接地している平面
     public Vector3 PrevGroundNormal = Vector3.up; // 前に接地している平面の法線
+    public Transform CurrGround; // 現在接地している平面
+    public Vector3 CurrGroundNormal = Vector3.up; // 現在接地している平面の法線
+    public Transform NextGround; // 次に接地している平面
+    public Vector3 NextGroundNormal = Vector3.up; // 次に接地している平面の法線
     public Vector3 Acceleration = Vector3.zero; // 重力などの移動を促す外力による加速度
     public float AccelerationLen = 0.0f; // 重力などの移動を促す外力による加速度の大きさ
     public Vector3 AccelerationFriction = Vector3.zero; // 摩擦力、空気抵抗力などの移動を邪魔する外力による加速度
@@ -49,10 +51,11 @@ public class BallPhysics : MonoBehaviour
         // 現在は真下の平面しかチェックしていない
         if (Physics.Raycast(RayOnGround, out RayHitInfoOnGround, RayLen, LayerMask.GetMask("Stage")))
         {
-            if (RayHitInfoOnGround.distance <= Collider.radius)
+            SetNextGroundInfo(RayHitInfoOnGround.transform, RayHitInfoOnGround.normal);
+            if (RayHitInfoOnGround.distance <= Collider.radius + Bias)
             {
-                CurrGround = RayHitInfoOnGround.transform;
-                CurrGroundNormal = RayHitInfoOnGround.normal;
+                // 接地情報を更新する
+                SetGroundInfo(RayHitInfoOnGround.transform, RayHitInfoOnGround.normal);
                 OnGround = true;
             }
             else
@@ -65,13 +68,12 @@ public class BallPhysics : MonoBehaviour
     // Update is called once per frame
     void Update()
     {
-        DebugLine();
         UpdatePhysics();
     }
 
     private void LateUpdate()
     {
-        
+        DebugLine();
     }
 
     public void AddForce(float power, Vector3 direction)
@@ -84,10 +86,10 @@ public class BallPhysics : MonoBehaviour
     public void UpdatePhysics()
     {
         // 静止状態だと更新不要
-        //if (IsStop())
-        //{
-        //    return;
-        //}
+        if (IsStop())
+        {
+            return;
+        }
 
         // 加速度と速度の更新
         UpdateAccelerationAndVelocity();
@@ -162,6 +164,9 @@ public class BallPhysics : MonoBehaviour
 
             // AccelerationFrictionを更新できたら、速度を更新する
             Velocity += AccelerationFriction;
+
+            // Ballが転がる間も、変形するので、エネルギー損失率をかける
+            Velocity *= 1 - PotentialLostRatio * Time.deltaTime;
             VelocityLen = Velocity.magnitude;
         }
         // 接地していない場合
@@ -242,7 +247,6 @@ public class BallPhysics : MonoBehaviour
         }
 
         // 位置を更新する
-        // DeltaTimeをUpdateAccelerationAndVelocity()の加速度にかけるのも要検討
         PrevPosition = transform.position;
         transform.position += Velocity * Time.deltaTime;
 
@@ -260,19 +264,25 @@ public class BallPhysics : MonoBehaviour
         // Raycastの方向を現在持っている平面の法線情報の逆方向にする
         RayOnGround.direction = -CurrGroundNormal;
         RayOnGround.origin = transform.position;
-        Physics.Raycast(RayOnGround, out RayHitInfoOnGround, RayLen, LayerMask.GetMask("Stage"));
+
+        // 現在持っている平面の法線情報でRaycastして、何も当たらなかったら、
+        // この平面を通り過ぎたと判断できるので、以下の処理は不要
+        if (!Physics.Raycast(RayOnGround, out RayHitInfoOnGround, RayLen, LayerMask.GetMask("Stage")))
+        {
+            SetGroundInfo(null, Vector3.zero);
+            return OnGround;
+        }
 
         // 現在の平面との距離がBallの半径以上だと、当たらなかったと判断できる
         // それ以降の処理が不要
-        if (RayHitInfoOnGround.distance > Collider.radius)
+        if (RayHitInfoOnGround.distance > Collider.radius + Bias)
         {
             return OnGround;
         }
 
         // 現在の平面との距離がBallの半径以下だと、当たったと判断できる
         // 接地情報を更新する
-        CurrGround = RayHitInfoOnGround.transform;
-        CurrGroundNormal = RayHitInfoOnGround.normal;
+        SetGroundInfo(RayHitInfoOnGround.transform, RayHitInfoOnGround.normal);
 
         // 速度の方向を平面の法線をもとに反射する
         // 速度の方向が平面と平行している場合、反射しても変わらない
@@ -334,8 +344,10 @@ public class BallPhysics : MonoBehaviour
         // 進行先に平面などがない場合、それ以降の処理が不要
         if (!Physics.Raycast(RayMoveDir, out RayHitInfoMoveDir, RayLen, LayerMask.GetMask("Stage")))
         {
+            SetNextGroundInfo(null, Vector3.zero);
             return OnHit;
         }
+        SetNextGroundInfo(RayHitInfoMoveDir.transform, RayHitInfoMoveDir.normal);
 
         // 進行先に平面がある場合、その平面の法線の逆方向をRayとして、RayCastで衝突する平面を取得
         Transform targetTransform = RayHitInfoMoveDir.transform;
@@ -352,7 +364,7 @@ public class BallPhysics : MonoBehaviour
 
         // 衝突する平面との距離がBallの半径以上だと、当たらなかったと判断できる
         // それ以降の処理が不要
-        if (RayHitInfoMoveDir.distance > Collider.radius - Bias)
+        if (RayHitInfoMoveDir.distance > Collider.radius + Bias)
         {
             return OnHit;
         }
@@ -401,8 +413,8 @@ public class BallPhysics : MonoBehaviour
             Vector3 friction = ComputeFriction(mass, cos);
             CheckAndSetVelocityInfoAfterCancelOut(Velocity, Velocity + friction);
 
-            CurrGround = RayHitInfoMoveDir.transform;
-            CurrGroundNormal = RayHitInfoMoveDir.normal;
+            // 接地情報を更新する
+            SetGroundInfo(RayHitInfoMoveDir.transform, RayHitInfoMoveDir.normal);
             OnGround = true;
         }
         // 登れない場合、反射処理
@@ -416,10 +428,6 @@ public class BallPhysics : MonoBehaviour
             cos = Vector3.Dot(RayHitInfoMoveDir.normal, Vector3.up);
             float mass = 1.0f / Mass;
 
-            // 重力を計算し、停止状態をチェック
-            Vector3 gravity = Vector3.down * Gravity;
-            CheckAndSetVelocityInfoAfterCancelOut(Velocity, Velocity + gravity);
-
             // 空気抵抗力を計算し、停止状態をチェック
             Vector3 airfriction = ComputeAirFriction(mass);
             CheckAndSetVelocityInfoAfterCancelOut(Velocity, Velocity + airfriction);
@@ -428,9 +436,19 @@ public class BallPhysics : MonoBehaviour
             Vector3 friction = ComputeFriction(mass, cos);
             CheckAndSetVelocityInfoAfterCancelOut(Velocity, Velocity + friction);
 
-            //CurrGround = RayHitInfoMoveDir.transform;
-            //CurrGroundNormal = RayHitInfoMoveDir.normal;
-            OnGround = false;
+            // 平面が垂直面の場合、反射しても重力をチェックする必要がない
+            // 接地情報を更新する必要もない
+            // つまり、cos > 0.0fの場合（垂直面ではない）のみ、チェックand更新
+            if (cos > 0.0f + Bias)
+            {
+                // 重力を計算し、停止状態をチェック
+                Vector3 gravity = Vector3.down * Gravity;
+                CheckAndSetVelocityInfoAfterCancelOut(Velocity, Velocity + gravity);
+
+                // 接地情報を更新する
+                SetGroundInfo(RayHitInfoMoveDir.transform, RayHitInfoMoveDir.normal);
+                OnGround = false;
+            }
         }
 
         // めり込みを補正する
@@ -441,7 +459,6 @@ public class BallPhysics : MonoBehaviour
         OnHit = true;
 
         return OnHit;
-
     }
 
     // 静止条件：
@@ -449,8 +466,13 @@ public class BallPhysics : MonoBehaviour
     // 前フレームの加速度が加速度のDeadZone以下
     public bool IsStop()
     {
+        // 斜面と水平面との内積によって、VelocityDeadZoneを動的に変える
+        // 斜面をのぼる時、速度の大きさが0にとても近いタイミングがある
+        // その時、VelocityDeadZoneが速度の大きさを超えてしまうと、斜面に停止してしまう
+        // 水平面にいる時、速度の大きさがある程度0に近づいたら、早く停止させても大丈夫
+        float dot = Vector3.Dot(CurrGroundNormal, Vector3.up);
         return 
-            Velocity.magnitude <= VelocityDeadZone &&
+            Velocity.magnitude <= VelocityDeadZone * dot &&
             Acceleration.magnitude <= AccelerationDeadZone;
     }
 
@@ -483,25 +505,24 @@ public class BallPhysics : MonoBehaviour
         return false;
     }
 
+    // 接地情報を更新する
+    public void SetGroundInfo(Transform ground, Vector3 normal)
+    {
+        PrevGround = CurrGround;
+        PrevGroundNormal = CurrGroundNormal;
+        CurrGround = ground;
+        CurrGroundNormal = normal;
+    }
+
+    // 次接触する接地情報を更新する
+    public void SetNextGroundInfo(Transform ground, Vector3 normal)
+    {
+        NextGround = ground;
+        NextGroundNormal = normal;
+    }
+
     private void DebugLine()
     {
-        // transform.localRotationはQuaternion
-        // Quaternion * Vecで、Vecを回転させる
-        Vector3 dir = transform.localRotation * Vector3.forward;
-        //dir = Quaternion.FromToRotation(Vector3.up, Quaternion.Euler(-45.0f, 0.0f, 0.0f) * Vector3.up) * Vector3.forward;
-
-        // Forwad
-        Debug.DrawLine(transform.position, transform.position + dir * DebugLineLen, Color.blue);
-        // Back
-        Debug.DrawLine(transform.position, transform.position + -dir * DebugLineLen, Color.red);
-
-        dir = transform.localRotation * Vector3.right;
-
-        //Right
-        Debug.DrawLine(transform.position, transform.position + dir * DebugLineLen, Color.green);
-        //Left
-        Debug.DrawLine(transform.position, transform.position + -dir * DebugLineLen, Color.yellow);
-
         Debug.DrawLine(transform.position, transform.position + Velocity.normalized * DebugLineLen, Color.black);
     }
 }
