@@ -46,17 +46,23 @@ public class BallPhysics : MonoBehaviour
     public float Bias = 0.001f;
     public float DebugLineLen = 20.0f;
 
-    // Start is called before the first frame update
-    void Start()
+    private void LateUpdate()
     {
-        PrevPosition = transform.position;
+        DebugLine();
+    }
+
+    // Guidelineの方向が変わった時、呼び出す必要がある
+    public void InitPhysicsInfo(Transform target)
+    {
+        PrevPosition = target.position;
+        transform.position = target.position;
 
         RayOnGround.direction = Vector3.down;
-        RayOnGround.origin = transform.position;
+        RayOnGround.origin = target.position;
 
-        LinearFoward = transform.forward;
-        LinearRight = transform.right;
-        LinearUp = transform.up;
+        LinearFoward = target.forward;
+        LinearRight = target.right;
+        LinearUp = target.up;
 
         // 周りのすべての平面をチェックするべき
         // 現在は真下の平面しかチェックしていない
@@ -76,18 +82,6 @@ public class BallPhysics : MonoBehaviour
         }
     }
 
-    // Update is called once per frame
-    void Update()
-    {
-        UpdatePhysics();
-    }
-
-    private void LateUpdate()
-    {
-        UpdateAngular();
-        DebugLine();
-    }
-
     public void AddForce(float power, Vector3 direction)
     {
         Acceleration = direction * power / Mass;
@@ -95,12 +89,20 @@ public class BallPhysics : MonoBehaviour
         LinearVelocityLen = LinearVelocity.magnitude;
     }
 
-    public void UpdatePhysics()
+    public void AddForceGuideline(float power, Vector3 direction)
+    {
+        Acceleration = direction * power / Mass;
+        LinearVelocity = Acceleration;
+        LinearVelocityLen = LinearVelocity.magnitude;
+    }
+
+
+    public Vector3 UpdatePhysics()
     {
         // 静止状態だと更新不要
         if (IsStop())
         {
-            return;
+            return transform.position;
         }
 
         // 加速度と速度の更新
@@ -110,7 +112,8 @@ public class BallPhysics : MonoBehaviour
         UpdateAngular();
 
         // 位置情報、接地情報を更新する
-        UpdateTransform();
+        Vector3 pos = UpdatePosition();
+        return pos;
     }
 
     // 加速度と速度の更新
@@ -252,7 +255,7 @@ public class BallPhysics : MonoBehaviour
     }
 
     // 位置情報、接地情報を更新する
-    public Vector3 UpdateTransform()
+    public Vector3 UpdatePosition()
     {
         // 速度や加速度が更新後、静止条件を満たす場合がある
         // 静止状態だと更新不要
