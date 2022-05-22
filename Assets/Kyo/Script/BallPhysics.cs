@@ -28,9 +28,11 @@ public class BallPhysics : MonoBehaviour
     public Vector3 LinearVelocity = Vector3.zero; // 速度
     public float LinearVelocityLen = 0.0f; // 速度の大きさ
     public float LinearVelocityDeadZone = 0.00001f; // 速度のDeadZone
+    public Vector3 AngularVelocityAxis = Vector3.zero; // 角回転の軸
     public Vector3 AngularVelocity = Vector3.zero; // 角速度
     public float AngularVelocityLen = 0.0f; // 角速度の大きさ
-    public float AngularVelocityDeadZone = 0.00001f; // 角速度のDeadZone
+    public float AngularVelocityDeadZone = 0.01f; // 角速度のDeadZone
+    public Vector3 Spin = Vector3.zero; // 
     public Quaternion LinearVelocityRotation; // 進行中のRotation
     public Vector3 LinearFoward;
     public Vector3 LinearRight;
@@ -572,7 +574,8 @@ public class BallPhysics : MonoBehaviour
         // ωはラジアンなので、角度に変換する
         AngularVelocityLen = LinearVelocityLen / Collider.radius * Mathf.Rad2Deg;
         // 回転軸
-        AngularVelocity = LinearRight;
+        AngularVelocityAxis = LinearRight;
+        AngularVelocity = AngularVelocityAxis * AngularVelocityLen;
         // 回転させる
         Quaternion rot = Quaternion.AngleAxis(AngularVelocityLen * Time.deltaTime, AngularVelocity);
         transform.rotation = rot * transform.rotation;

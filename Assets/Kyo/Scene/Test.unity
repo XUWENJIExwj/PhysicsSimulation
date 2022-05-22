@@ -691,7 +691,6 @@ MonoBehaviour:
   m_EditorClassIdentifier: 
   BallPhysic: {fileID: 429235499}
   Guide: {fileID: 1515667044}
-  ChangedGuide: 0
   Power: 15
 --- !u!1 &1415862334
 GameObject:
@@ -766,13 +765,18 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: e8afbe807351372419513d0aa497973d, type: 3}
   m_Name: 
   m_EditorClassIdentifier: 
-  DebugLineLen: 20
-  MaxBall: 30
-  Interval: 10
   GuideCreater: {fileID: 1080374659}
   GuideBallsParent: {fileID: 1415862334}
   GuideBall: {fileID: 6282962310798225609, guid: 2e76f8dc23cadb64b95341c39e0409de, type: 3}
   GuideBalls: []
+  MaxBall: 30
+  Interval: 10
+  Rotation: {x: 0, y: 0, z: 0}
+  RotSpeed: 60
+  RotXMin: -60
+  RotXMax: 0
+  GuideChanged: 1
+  DebugLineLen: 20
 --- !u!1001 &1810193424
 PrefabInstance:
   m_ObjectHideFlags: 0
@@ -1010,6 +1014,10 @@ PrefabInstance:
     - target: {fileID: 4830759755793157665, guid: 7cdc06fa05b25434b8f9f185bacc2004, type: 3}
       propertyPath: m_LocalEulerAnglesHint.z
       value: 0
+      objectReference: {fileID: 0}
+    - target: {fileID: 4830759755793157666, guid: 7cdc06fa05b25434b8f9f185bacc2004, type: 3}
+      propertyPath: AngularVelocityDeadZone
+      value: 0.01
       objectReference: {fileID: 0}
     - target: {fileID: 4830759755793157677, guid: 7cdc06fa05b25434b8f9f185bacc2004, type: 3}
       propertyPath: m_Name
