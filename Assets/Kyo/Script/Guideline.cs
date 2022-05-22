@@ -4,18 +4,26 @@ using UnityEngine;
 
 public class Guideline : MonoBehaviour
 {
+    public enum ShotType
+    {
+        Horizontal,
+        Vertical,
+    }
+
+    public ShotType Shot = ShotType.Horizontal;
     public BallPhysics GuideCreater;
     public GameObject GuideBallsParent;
     public GameObject GuideBall;
     public GameObject[] GuideBalls;
-    public int MaxBall = 20;
-    public int Interval = 2;
+    public int MaxBall = 30;
+    public int Interval = 15;
     public Vector3 Rotation = Vector3.zero;
-    public float RotSpeed = 1.0f;
+    public float RotSpeed = 60.0f;
     public float RotXMin = -60.0f;
     public float RotXMax = 0.0f;
     public bool GuideChanged = true;
     public float DebugLineLen = 20.0f;
+
 
     void LateUpdate()
     {
@@ -23,15 +31,16 @@ public class Guideline : MonoBehaviour
     }
 
     // Start()Ç≈ÇÃèâä˙âª
-    public void InitGuideline(float power)
+    public void InitGuideline(float power, Vector3 spin)
     {
+        Rotation = transform.rotation.eulerAngles;
         GuideBalls = new GameObject[MaxBall];
         for (int i = 0; i < GuideBalls.Length; ++i)
         {
             GuideBalls[i] = Instantiate(GuideBall, GuideBallsParent.transform);
         }
 
-        CreateGuideLine(power);
+        CreateGuideLine(power, spin);
     }
 
     public void Rot()
@@ -57,8 +66,18 @@ public class Guideline : MonoBehaviour
         if (GuideChanged)
         {
             Quaternion rotX = Quaternion.AngleAxis(Rotation.x, transform.right);
-            Quaternion rotY = Quaternion.AngleAxis(Rotation.y, transform.up);
+            Quaternion rotY = Quaternion.AngleAxis(Rotation.y, Vector3.up);
             transform.rotation = rotX * rotY;
+            //transform.rotation = rotX * transform.rotation;
+        }
+
+        if (Rotation.x < 0.0f)
+        {
+            Shot = ShotType.Vertical;
+        }
+        else
+        {
+            Shot = ShotType.Horizontal;
         }
     }
 
@@ -81,7 +100,7 @@ public class Guideline : MonoBehaviour
         transform.position = Position;
     }
 
-    public void CreateGuideLine(float power)
+    public void CreateGuideLine(float power, Vector3 spin)
     {
         // GuidelineÇÃå¸Ç´Ç™ïœÇÌÇ¡ÇƒÇ¢Ç»Ç¢Ç»ÇÁ
         // êVÇµÇ¢GuidelineÇÃê∂ê¨ÇÕïsóv
@@ -93,7 +112,7 @@ public class Guideline : MonoBehaviour
         GuideChanged = false;
 
         GuideCreater.InitPhysicsInfo(transform);
-        GuideCreater.AddForceGuideline(power, transform.forward);
+        GuideCreater.AddForceGuideline(power, transform.forward, spin);
 
         for (int i = 0; i < GuideBalls.Length; ++i)
         {
@@ -102,6 +121,11 @@ public class Guideline : MonoBehaviour
                 GuideBalls[i].transform.position = GuideCreater.UpdatePhysics();
             }
         }
+    }
+
+    public void ChangedGuide()
+    {
+        GuideChanged = true;
     }
 
     private void DebugLine()

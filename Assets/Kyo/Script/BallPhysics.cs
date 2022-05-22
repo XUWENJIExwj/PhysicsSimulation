@@ -6,12 +6,12 @@ public class BallPhysics : MonoBehaviour
 {
     public float Mass = 1.0f; // 質量
     public float SlopeLimit = 45.0f; // 登れる斜面の最大角度
-    public float PotentialLostRatio = 0.25f; // 何かにぶつかる時、変形などの原因で損失するエネルギーの比率
+    public float PotentialLostRatio = 0.15f; // 何かにぶつかる時、変形などの原因で損失するエネルギーの比率
     public float Gravity = 0.098f;
     public float Friction = 0.0f;
     public float FrictionRatio = 0.1f; // 摩擦係数
     public float RollingFrictionRatio = 0.025f; // 転がる時の摩擦力は通常の摩擦力の1/60～1/40になると言われている
-    public float AirFriction = 0.001f; // 空気抵抗力
+    public float AirFriction = 0.01f; // 空気抵抗力
     public bool OnGround = false; // 接地フラグ
     public bool OnHit = false; // 進行先の平面との衝突フラグ
     public Transform PrevGround; // 前に接地している平面
@@ -24,15 +24,16 @@ public class BallPhysics : MonoBehaviour
     public float AccelerationLen = 0.0f; // 重力などの移動を促す外力による加速度の大きさ
     public Vector3 AccelerationFriction = Vector3.zero; // 摩擦力、空気抵抗力などの移動を邪魔する外力による加速度
     public float AccelerationFrictionLen = 0.0f; // 摩擦力、空気抵抗力などの移動を邪魔する外力による加速度の大きさ
-    public float AccelerationDeadZone = 0.00001f; // 加速度のDeadZone
+    public float AccelerationDeadZone = 0.0001f; // 加速度のDeadZone
     public Vector3 LinearVelocity = Vector3.zero; // 速度
     public float LinearVelocityLen = 0.0f; // 速度の大きさ
-    public float LinearVelocityDeadZone = 0.00001f; // 速度のDeadZone
+    public float LinearVelocityDeadZone = 0.0001f; // 速度のDeadZone
     public Vector3 AngularVelocityAxis = Vector3.zero; // 角回転の軸
     public Vector3 AngularVelocity = Vector3.zero; // 角速度
     public float AngularVelocityLen = 0.0f; // 角速度の大きさ
-    public float AngularVelocityDeadZone = 0.01f; // 角速度のDeadZone
-    public Vector3 Spin = Vector3.zero; // 
+    public float AngularVelocityDeadZone = 0.1f; // 角速度のDeadZone
+    public Vector3 SpinPower = Vector2.zero; // スピンが働く力
+    public bool VerticalShot = false; // 空中を飛ばすShotであるか
     public Quaternion LinearVelocityRotation; // 進行中のRotation
     public Vector3 LinearFoward;
     public Vector3 LinearRight;
@@ -42,11 +43,11 @@ public class BallPhysics : MonoBehaviour
     public RaycastHit RayHitInfoMoveDir;
     public Ray RayOnGround;
     public RaycastHit RayHitInfoOnGround;
-    public float RayLen = 100.0f;
+    public float RayLen = 10.0f;
     public SphereCollider Collider;
     public Vector3 StartPosition;
     public float Bias = 0.001f;
-    public float DebugLineLen = 20.0f;
+    public float DebugLineLen = 2.0f;
 
     private void LateUpdate()
     {
@@ -79,23 +80,35 @@ public class BallPhysics : MonoBehaviour
             }
             else
             {
-                AddForce(Gravity, Vector3.down);
+                AddForce(Gravity, Vector3.down, SpinPower);
             }
         }
     }
 
-    public void AddForce(float power, Vector3 direction)
+    public void AddForce(float power, Vector3 direction, Vector3 spin)
     {
         Acceleration = direction * power / Mass;
         LinearVelocity += Acceleration;
         LinearVelocityLen = LinearVelocity.magnitude;
+        SpinPower = spin;
+        // 空中に飛ばすShotであるか
+        if (Vector3.Dot(Acceleration, Vector3.up) > 0.0f)
+        {
+            VerticalShot = true;
+        }
     }
 
-    public void AddForceGuideline(float power, Vector3 direction)
+    public void AddForceGuideline(float power, Vector3 direction, Vector3 spin)
     {
         Acceleration = direction * power / Mass;
         LinearVelocity = Acceleration;
         LinearVelocityLen = LinearVelocity.magnitude;
+        SpinPower = spin;
+        // 空中に飛ばすShotであるか
+        if (Vector3.Dot(Acceleration, Vector3.up) > 0.0f)
+        {
+            VerticalShot = true;
+        }
     }
 
 
@@ -133,6 +146,12 @@ public class BallPhysics : MonoBehaviour
         // 接地している場合
         if (OnGround)
         {
+            // 接地している時、横スピンが常に機能するので、先に横スピンをかける
+            Quaternion rot = Quaternion.AngleAxis(SpinPower.x * Time.deltaTime, CurrGroundNormal);
+            LinearVelocity = rot * LinearVelocity;
+            // 横スピンも減衰させる
+            SpinPower.x *= 1 - PotentialLostRatio * Time.deltaTime;
+
             // 現在の平面と水平面の角度のCosを求める
             float cos = Vector3.Dot(CurrGroundNormal, Vector3.up);
 
@@ -306,17 +325,20 @@ public class BallPhysics : MonoBehaviour
         // 接地情報を更新する
         SetGroundInfo(RayHitInfoOnGround.transform, RayHitInfoOnGround.normal);
 
+        // 縦スピンをかける
+        LinearVelocity = ComputeVelocityWhenIsVerticalShot(RayHitInfoOnGround.normal);
+
         // 速度の方向を平面の法線をもとに反射する
         // 速度の方向が平面と平行している場合、反射しても変わらない
         // 速度の方向が平面と平行していない場合、平面に突入してきたことがわかる
         // そのため、反射後の速度の方向は地面から離れる
         LinearVelocity = Vector3.Reflect(LinearVelocity, CurrGroundNormal);
-        LinearVelocityLen = LinearVelocity.magnitude;
 
         // 平面に突入してきた場合のみ、エネルギーの損失を反映する
         // 速度の方向と平面の法線の内積で、損失率を0～PotentialLostRatioにする
         float dot = Vector3.Dot(LinearVelocity.normalized, CurrGroundNormal);
         LinearVelocity *= 1 - PotentialLostRatio * dot;
+        LinearVelocityLen = LinearVelocity.magnitude;
 
         // 速度が反射によって変更されたので、その場で停止状態に満たすかをチェック
         // 現在の平面と水平面の角度のCosを求める
@@ -353,8 +375,8 @@ public class BallPhysics : MonoBehaviour
         RayMoveDir.direction = LinearVelocity.normalized;
         RayMoveDir.origin = transform.position;
 
-        //// 進行方向と接地チェック時のRaycast方向が同じであるかをチェック
-        //// 同じの場合、すでにチェック済みなので、再チェックが不要
+        // 進行方向と接地チェック時のRaycast方向が同じであるかをチェック
+        // 同じの場合、すでにチェック済みなので、再チェックが不要
         float dot = Vector3.Dot(RayMoveDir.direction, RayOnGround.direction);
         if (dot >= 1.0f - Bias)
         {
@@ -391,6 +413,25 @@ public class BallPhysics : MonoBehaviour
             return OnHit;
         }
 
+        // 速度の反射更新
+        UpdateVelocityAfterHit();
+
+        // めり込みを補正する
+        var pos = transform.position;
+        pos = RayHitInfoMoveDir.point + RayHitInfoMoveDir.normal * Collider.radius;
+        transform.position = pos;
+
+        OnHit = true;
+
+        return OnHit;
+    }
+
+    // 速度の反射更新
+    public void UpdateVelocityAfterHit()
+    {
+        // 縦スピンをかける
+        LinearVelocity = ComputeVelocityWhenIsVerticalShot(RayHitInfoMoveDir.normal);
+
         // 衝突した平面が先のRayCastでの衝突する平面と同じであれば、間もなく衝突と判断できる
         // 登れる平面の最大角度のcosを求める
         // 衝突した平面の法線をもとに、進行方向を反射させる
@@ -401,7 +442,7 @@ public class BallPhysics : MonoBehaviour
         float cos = Mathf.Cos(SlopeLimit * Mathf.Deg2Rad);
         LinearVelocity *= 1 - PotentialLostRatio * cos;
         Vector3 reflectVel = Vector3.Reflect(LinearVelocity, RayHitInfoMoveDir.normal);
-        dot = Vector3.Dot(reflectVel.normalized, RayHitInfoMoveDir.normal);
+        float dot = Vector3.Dot(reflectVel.normalized, RayHitInfoMoveDir.normal);
         // 登れる場合、CurrentGroundとCurrGroundNormalの更新準備に入る
         if (dot <= cos + Bias)
         {
@@ -414,7 +455,6 @@ public class BallPhysics : MonoBehaviour
             Vector3 axis = Vector3.Cross(CurrGroundNormal, RayHitInfoMoveDir.normal);
             cos = Vector3.Dot(CurrGroundNormal, RayHitInfoMoveDir.normal);
             float angle = Mathf.Rad2Deg * Mathf.Acos(cos);
-
             LinearVelocity = Quaternion.AngleAxis(angle, axis.normalized) * LinearVelocity;
             LinearVelocityLen = LinearVelocity.magnitude;
 
@@ -442,6 +482,7 @@ public class BallPhysics : MonoBehaviour
         // 登れない場合、反射処理
         else
         {
+            // 速度の反射
             LinearVelocity = reflectVel;
             LinearVelocityLen = LinearVelocity.magnitude;
 
@@ -473,14 +514,45 @@ public class BallPhysics : MonoBehaviour
             }
         }
 
-        // めり込みを補正する
-        var pos = transform.position;
-        pos = RayHitInfoMoveDir.point + RayHitInfoMoveDir.normal * Collider.radius;
-        transform.position = pos;
+        // 衝突したらスピンをなくす
+        SpinPower = Vector3.zero;
+    }
 
-        OnHit = true;
+    // 縦スピンがある時、衝突後の速度更新
+    public Vector3 ComputeVelocityWhenIsVerticalShot(Vector3 normal)
+    {
+        // VerticalShotではなければ、更新不要
+        if (!VerticalShot)
+        {
+            return LinearVelocity;
+        }
+        // 一回目の着地だけスピンをかける
+        VerticalShot = false;
 
-        return OnHit;
+        // 衝突した瞬間に、速度の平面に平行する分速度V.xを求める
+        // V: 速度
+        // V.x: 平面に平行する分速度
+        // V.y: 平面に垂直する分速度
+        // 速度と平面の法線との内積から、V.yが求められる
+        // V = V.x + V.y から V.x = V - V.y
+        float dot = Vector3.Dot(LinearVelocity, normal);
+        Vector3 vy = normal * dot;
+        Vector3 vx = LinearVelocity + -vy;
+        Vector3 spinY = vx;
+        int sy = (int)Mathf.Abs(SpinPower.y);
+        if (sy > 0.0f)
+        {
+            // V.xをFowardにSpinPower.y分、縦スピンをかける
+            int maxSpinStep = 6 + 1; // 0を含めて7になる
+            int ratio = maxSpinStep / (6 / 2); // -1～-3はまだ逆方向に飛ばない、-4～-6は逆方向に飛ぶ。ちょうど半分ずつ
+            spinY += vx * (ratio * SpinPower.y / maxSpinStep);
+        }
+        
+        // V.z: V.xをFoward、平面の法線をUpとした時のRight
+        // Right方向にSpinPower.z分、横スピンをかける
+        Vector3 vz = Vector3.Cross(normal, vx.normalized);
+        Vector3 spinZ = vz.normalized * SpinPower.z;
+        return spinY + spinZ + vy;
     }
 
     // 静止条件：
@@ -535,6 +607,8 @@ public class BallPhysics : MonoBehaviour
             AngularVelocity = Vector3.zero;
             AngularVelocityLen = 0.0f;
 
+            SpinPower = Vector3.zero;
+
             OnGround = true;
             return true;
         }
@@ -576,8 +650,10 @@ public class BallPhysics : MonoBehaviour
         // 回転軸
         AngularVelocityAxis = LinearRight;
         AngularVelocity = AngularVelocityAxis * AngularVelocityLen;
+
+        // 回転量を求める
+        Quaternion rot = Quaternion.AngleAxis(AngularVelocityLen * Time.deltaTime, AngularVelocityAxis);
         // 回転させる
-        Quaternion rot = Quaternion.AngleAxis(AngularVelocityLen * Time.deltaTime, AngularVelocity);
         transform.rotation = rot * transform.rotation;
     }
 
