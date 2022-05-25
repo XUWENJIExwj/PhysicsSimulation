@@ -45,6 +45,7 @@ public class BallPhysics : MonoBehaviour
     public RaycastHit RayHitInfoOnGround;
     public float RayLen = 10.0f;
     public SphereCollider Collider;
+    public float Radius;
     public Vector3 StartPosition;
     public float Bias = 0.001f;
     public float DebugLineLen = 2.0f;
@@ -67,12 +68,14 @@ public class BallPhysics : MonoBehaviour
         LinearRight = target.right;
         LinearUp = target.up;
 
+        Radius = transform.localScale.x * Collider.radius;
+
         // 周りのすべての平面をチェックするべき
         // 現在は真下の平面しかチェックしていない
         if (Physics.Raycast(RayOnGround, out RayHitInfoOnGround, RayLen, LayerMask.GetMask("Stage")))
         {
             SetNextGroundInfo(RayHitInfoOnGround.transform, RayHitInfoOnGround.normal);
-            if (RayHitInfoOnGround.distance <= Collider.radius + Bias)
+            if (RayHitInfoOnGround.distance <= Radius + Bias)
             {
                 // 接地情報を更新する
                 SetGroundInfo(RayHitInfoOnGround.transform, RayHitInfoOnGround.normal);
@@ -316,7 +319,7 @@ public class BallPhysics : MonoBehaviour
 
         // 現在の平面との距離がBallの半径以上だと、当たらなかったと判断できる
         // それ以降の処理が不要
-        if (RayHitInfoOnGround.distance > Collider.radius + Bias)
+        if (RayHitInfoOnGround.distance > Radius + Bias)
         {
             return OnGround;
         }
@@ -359,7 +362,7 @@ public class BallPhysics : MonoBehaviour
 
         // めり込みを補正する
         var pos = transform.position;
-        pos = RayHitInfoOnGround.point + RayHitInfoOnGround.normal * Collider.radius;
+        pos = RayHitInfoOnGround.point + RayHitInfoOnGround.normal * Radius;
         transform.position = pos;
 
         OnGround = true;
@@ -408,7 +411,7 @@ public class BallPhysics : MonoBehaviour
 
         // 衝突する平面との距離がBallの半径以上だと、当たらなかったと判断できる
         // それ以降の処理が不要
-        if (RayHitInfoMoveDir.distance > Collider.radius + Bias)
+        if (RayHitInfoMoveDir.distance > Radius + Bias)
         {
             return OnHit;
         }
@@ -418,7 +421,7 @@ public class BallPhysics : MonoBehaviour
 
         // めり込みを補正する
         var pos = transform.position;
-        pos = RayHitInfoMoveDir.point + RayHitInfoMoveDir.normal * Collider.radius;
+        pos = RayHitInfoMoveDir.point + RayHitInfoMoveDir.normal * Radius;
         transform.position = pos;
 
         OnHit = true;
@@ -646,7 +649,7 @@ public class BallPhysics : MonoBehaviour
 
         // 角速度と線速度の関係:ω = v / r
         // ωはラジアンなので、角度に変換する
-        AngularVelocityLen = LinearVelocityLen / Collider.radius * Mathf.Rad2Deg;
+        AngularVelocityLen = LinearVelocityLen / Radius * Mathf.Rad2Deg;
         // 回転軸
         AngularVelocityAxis = LinearRight;
         AngularVelocity = AngularVelocityAxis * AngularVelocityLen;
